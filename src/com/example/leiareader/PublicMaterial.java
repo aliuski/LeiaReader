@@ -17,7 +17,7 @@ public class PublicMaterial {
 			ft[loop].delete();
 	}
 	
-	public static void unzupMaterial(String directory) {
+	public static boolean unzupMaterial(String directory) {
 		
     	File folder = new File(directory + ZIPFILENAME);
     	if(folder.exists()){
@@ -41,9 +41,11 @@ public class PublicMaterial {
     			folder.delete();
     			
     		} catch(IOException ex) {
-    			ex.printStackTrace(); 
+    			ex.printStackTrace();
+    			return false;
     		}
     	}
+    	return true;
 	}
     	
     public static File[] material(String directory) {

@@ -15,79 +15,93 @@ import org.json.JSONObject;
 
 import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
+import java.util.Vector;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
-import android.graphics.Point;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.view.Display;
-import android.view.KeyEvent;
-import android.view.Window;
-import android.view.WindowManager;
+import android.os.Environment;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.BaseAdapter;
+import android.widget.GridView;
+import android.widget.ImageView;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.InputStream;
 import java.io.Reader;
 
+import com.example.leiareader.ShowSelectedPaper;
+
+import android.widget.AdapterView.OnItemClickListener;
+
 public class MainActivity extends Activity {
-    
+	public final static String EXTRA_SELECTEDDIR = "com.example.leiareader.SELECTEDDIR";
+	
 	static final String GETLIST = "";
 	static final String DOWNLOAD = "";
     
+    private Vector <Bitmap>imageIDs = new Vector<Bitmap>();
+    private String extimageorder[][];
+	
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-      
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                                WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
         setContentView(R.layout.activity_main);
-/*        
-        TouchImageView img = (TouchImageView) findViewById(R.id.img);
 
-        Display display = getWindowManager().getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        int width = size.x;
-        int height = size.y;
-        
-        img.setFileList(PublicMaterial.material("/storage/emulated/0/Download/test/"), width, height);
-*/
-        
-        if((new Date()).after(new Date(getCacheDir().lastModified() + 43200000)))
-            new ReadPapyrosTask().execute(GETLIST,DOWNLOAD);
-        else
-        	openReader();
+        loadSelectedPaperList();
     }
-    
+
+    private void loadSelectedPaperList(){
+        getPaperList();
+
+        GridView gridView = (GridView) findViewById(R.id.gridview);
+        gridView.setAdapter(new ImageAdapter(this));
+
+        gridView.setOnItemClickListener(new OnItemClickListener()
+        {
+            public void onItemClick(AdapterView<?> parent,
+            View v, int position, long id) {
+                Intent intent = new Intent(MainActivity.this, ShowSelectedPaper.class);
+        		intent.putExtra(EXTRA_SELECTEDDIR,extimageorder[position][1]+"/");
+        		startActivity(intent);  
+            }
+        });
+    }
+
     @Override
-    protected void onStart(){
-    	super.onStart();
-        if((new Date()).after(new Date(getCacheDir().lastModified() + 43200000)))
-            new ReadPapyrosTask().execute(GETLIST,DOWNLOAD);
-    }
-    
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        return false;
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        return true;
     }
 
-    private void openReader(){
-        TouchImageView img = (TouchImageView) findViewById(R.id.img);
-
-        Display display = getWindowManager().getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        int width = size.x;
-        int height = size.y;
-        File fl[] = PublicMaterial.material(getCacheDir().getAbsolutePath()+"/");
-        if(fl.length > 0)
-        	img.setFileList(fl, width, height);
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.action_settings) {
+        	
+        	if(IsExternalStorageAvailableAndWriteable()){
+        		new ReadPapyrosTask().execute(GETLIST,DOWNLOAD);
+        	}
+        	return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
     
     private class ReadPapyrosTask extends AsyncTask
@@ -106,10 +120,10 @@ public class MainActivity extends Activity {
         @Override
         protected void onPostExecute(String result) {
         	progressDialog.dismiss();
-        	openReader();
+        	loadSelectedPaperList();
         }
     }
-    
+
 	public String getMaterialFromLeia(String ulist, String udata) {
 		
 		try{
@@ -140,11 +154,13 @@ public class MainActivity extends Activity {
 		// Install the all-trusting host verifier
 		HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid);
 
-		PublicMaterial.deleteMaterial(getCacheDir().getAbsolutePath()+"/");
-		
 		SimpleDateFormat sim = new SimpleDateFormat("yyyyMMdd");
 		
-		URL url = new URL(ulist+sim.format(new Date())+"000000?deviceid=0");
+		Calendar cal = Calendar.getInstance();
+		cal.setTime(new Date());
+		cal.add(Calendar.DATE, -10);
+		
+		URL url = new URL(ulist+sim.format(cal.getTime())+"000000?deviceid=0");
 		URLConnection con = url.openConnection();
 		Reader reader = new InputStreamReader(con.getInputStream());
 		StringBuilder stringBuilder = new StringBuilder();
@@ -154,19 +170,66 @@ public class MainActivity extends Activity {
 				break;
 			stringBuilder.append((char)ch);
 		}
+
+		File f[] = new File[4];
+		f[0] = getExternalFilesDir("paper1");
+		f[1] = getExternalFilesDir("paper2");
+		f[2] = getExternalFilesDir("paper3");
+		f[3] = getExternalFilesDir("paper4");
+    	String[][] fileorder = orderby(f);
 		
     	JSONObject jsonObject = new JSONObject("{\"data\":"+stringBuilder.toString()+"}");
     	JSONArray postalCodesItems = new JSONArray(jsonObject.getString("data"));
-    	JSONObject postalCodesItem = postalCodesItems.getJSONObject(0);
-    	String id = postalCodesItem.getString("id");
+
+    	Log.d("KOE","AML: size: "+ postalCodesItems.length());
     	
-		url = new URL(udata+id+"?deviceid=0");
-		con = url.openConnection();
+    	int papercounter = 0;
+    	for(int loop=postalCodesItems.length()-1;loop > 0;loop-=2){
+    		Log.d("KOE","AML: loop: "+ loop);
+	    	JSONObject postalCodesItem = postalCodesItems.getJSONObject(loop-1);
+	    	String id = postalCodesItem.getString("id");
+	    	java.text.DateFormat df = new SimpleDateFormat("yyyyMMddkkmmss");
+	    	Date date = df.parse(postalCodesItem.getString("createdate"));
+	    	boolean find = true;
+	    	for(int i=0 ; i<f.length ; i++){
+	    		
+	    		Log.d("KOE","AML: Test: "+ fileorder[i][0] +" "+ (new java.sql.Date(date.getTime())).toString());
+	    		if(fileorder[i][0].equals((new java.sql.Date(date.getTime())).toString())){
+	    			find = false;
+	    			Log.d("KOE","AML: Document found: "+ fileorder[i][0]);
+	    			break;
+	    		}
+	    	}
+	    	if(find){
+	    		Log.d("KOE","AML: Document Make: "+ date.toString() +" File: "+fileorder[f.length-1][1]);
+	    		loadRowData(udata, id, fileorder[f.length-1][1], date);
+	    		fileorder = orderby(f);
+	    	}
+	    	
+	    	papercounter++;
+	    	Log.d("KOE","AML: papercounter: "+ papercounter);
+	    	if(papercounter >= 4)
+	    		break;
+    	}
+    	
+	}catch(Exception e){
+		Log.d("KOE","AML: "+ e);
+		return "FALSE";
+		}
+	return "TRUE";
+	}
+
+	private void loadRowData(String udata, String id, String extStorage, Date date) throws Exception{
+		
+		PublicMaterial.deleteMaterial(extStorage+"/");
+		
+		URL url = new URL(udata+id+"?deviceid=0");
+		URLConnection con = url.openConnection();
 
 		InputStream input = con.getInputStream();
 		byte[] buffer = new byte[4096];
 		int n = - 1;
-		OutputStream output = new FileOutputStream(new File(getCacheDir(),PublicMaterial.ZIPFILENAME));
+		OutputStream output = new FileOutputStream(extStorage+"/"+PublicMaterial.ZIPFILENAME);
 		while ( (n = input.read(buffer)) != -1)
 		{
 			if (n > 0)
@@ -174,11 +237,119 @@ public class MainActivity extends Activity {
 		}
 		output.close();
 		
-		PublicMaterial.unzupMaterial(getCacheDir().getAbsolutePath()+"/");
-		
-	}catch(Exception e){
-		return "FALSE";
+		if(PublicMaterial.unzupMaterial(extStorage+"/")){
+			OutputStream outputStream = new FileOutputStream(extStorage+"/DATE");
+			outputStream.write((new java.sql.Date(date.getTime())).toString().getBytes());
+			outputStream.close();
 		}
-	return "TRUE";
-}
+	}
+
+    public class ImageAdapter extends BaseAdapter 
+    {
+        private Context context;
+
+        public ImageAdapter(Context c)
+        {
+            context = c;
+        }
+
+        //---returns the number of images---
+        public int getCount() {
+            return imageIDs.size();
+        }
+
+        //---returns the item---
+        public Object getItem(int position) {
+            return position;
+        }
+
+        //---returns the ID of an item---
+        public long getItemId(int position) {
+            return position;
+        }
+
+        //---returns an ImageView view---
+        public View getView(int position, View convertView,
+                ViewGroup parent)
+        {
+            ImageView imageView;
+            if (convertView == null) {
+                imageView = new ImageView(context);
+                imageView.setLayoutParams(new
+                        GridView.LayoutParams(195, 195));
+                imageView.setScaleType(
+                        ImageView.ScaleType.CENTER_CROP);
+                imageView.setPadding(5, 5, 5, 5);
+            } else {
+                imageView = (ImageView) convertView;
+            }
+		    imageView.setImageBitmap(imageIDs.get(position));
+            
+            return imageView;
+        }
+    }
+
+    private void getPaperList(){
+    	if(IsExternalStorageAvailableAndWriteable()){
+    		extimageorder = orderby(getExternalFilesDir(null).listFiles());
+    		imageIDs = new Vector<Bitmap>();
+    		for(int loop=0 ; loop<extimageorder.length ; loop++){
+	    		File fl[] = PublicMaterial.material(extimageorder[loop][1]+"/");	    		
+	            if(fl.length > 0)
+	    			imageIDs.add(BitmapFactory.decodeFile(fl[0].getAbsolutePath()));
+    		}    		
+		}
+    }
+
+    public String[][] orderby(File f[]) {
+    	
+    	String out[][] = new String[f.length][2];
+    	for(int i=0;i<f.length;i++){
+    		out[i][1] = f[i].getAbsolutePath();
+    		try{
+    			FileInputStream fis = new FileInputStream(f[i].getAbsolutePath()+"/DATE");
+    			InputStreamReader isr = new InputStreamReader(fis);
+    			char[] inputBuffer = new char[10];
+    			isr.read(inputBuffer,0,10);
+    			out[i][0] = new String(inputBuffer,0,10);
+            	isr.close();
+            	fis.close();
+    		} catch(Exception e){
+    			out[i][0] = new String("");
+    		}
+    	}
+
+	    for(int x=0;x<f.length;x++){
+		    for(int y=0;y<(f.length-1);y++){
+			    if(out[y][0].compareTo(out[y+1][0])<0){
+			    	String t0 = out[y][0];
+			    	String t1 = out[y][1];
+			    	out[y][0] = out[y+1][0];
+			    	out[y][1] = out[y+1][1];
+			    	out[y+1][0] = t0;
+			    	out[y+1][1] = t1;
+			    }
+		    }
+	    }
+	    return out;
+    }
+    
+    public boolean IsExternalStorageAvailableAndWriteable() {
+        boolean externalStorageAvailable = false;
+        boolean externalStorageWriteable = false;
+        String state = Environment.getExternalStorageState();
+
+        if (Environment.MEDIA_MOUNTED.equals(state)) {
+            //---you can read and write the media---
+            externalStorageAvailable = externalStorageWriteable = true;
+        } else if (Environment.MEDIA_MOUNTED_READ_ONLY.equals(state)) {
+            //---you can only read the media---
+            externalStorageAvailable = true;
+            externalStorageWriteable = false;
+        } else {
+            //---you cannot read nor write the media---
+            externalStorageAvailable = externalStorageWriteable = false;
+        }
+        return externalStorageAvailable && externalStorageWriteable;
+    }
 }
