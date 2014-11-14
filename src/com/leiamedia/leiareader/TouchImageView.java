@@ -1,4 +1,4 @@
-package com.example.leiareader;
+package com.leiamedia.leiareader;
 
 import java.io.File;
 import java.util.Timer;
@@ -164,11 +164,21 @@ public class TouchImageView extends ImageView {
 		}
 	}
 	
-	public void setFileList(File filelist[], int sizex, int sizey){
+	public int getCounter(){
+		return counter;
+	}
+	
+	public void setFileList(File filelist[], int sizex, int sizey, int page){
 		this.filelist = filelist;
 		this.sizex = sizex;
 		this.sizey = sizey;
-		counter = 0;
+		if(sizex > sizey) {
+			if(page % 2 == 0)
+				this.counter = page;
+			else
+				this.counter = page-1;
+		} else
+			this.counter = page;
 		createBitmap();
 		setImage(0);
 	}
@@ -231,7 +241,7 @@ public class TouchImageView extends ImageView {
         	timer.cancel();
         timer = new Timer();
         moveTimerTask = new MoveTimerTask();
-        timer.schedule(moveTimerTask, 50, 50);
+        timer.schedule(moveTimerTask, 20, 20);
     }
 
     class MoveTimerTask extends TimerTask {

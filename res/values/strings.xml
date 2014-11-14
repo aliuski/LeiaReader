@@ -3,6 +3,7 @@
 
     <string name="app_name">LeiaReader</string>
     <string name="hello_world">Hello world!</string>
-    <string name="action_settings">Settings</string>
+    <string name="action_load">Lataa lehti palvelusta</string>
+    <string name="action_select">Valitse lehti</string>
 
 </resources>

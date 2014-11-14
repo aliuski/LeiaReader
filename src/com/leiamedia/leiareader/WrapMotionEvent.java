@@ -1,4 +1,4 @@
-package com.example.leiareader;
+package com.leiamedia.leiareader;
 
 import android.view.MotionEvent;
 

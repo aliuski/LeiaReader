@@ -3,7 +3,7 @@
     android:layout_height="fill_parent"
     android:orientation="vertical" >
 
-<com.example.leiareader.TouchImageView
+<com.leiamedia.leiareader.TouchImageView
 	android:id="@+id/img"
 	android:layout_width="match_parent"
 	android:layout_height="match_parent"

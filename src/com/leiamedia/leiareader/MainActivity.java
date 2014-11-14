@@ -1,4 +1,4 @@
-package com.example.leiareader;
+package com.leiamedia.leiareader;
 
 import java.net.URL;
 import java.net.URLConnection;
@@ -17,74 +17,76 @@ import java.security.cert.X509Certificate;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.Vector;
 
 import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.graphics.Point;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.PowerManager;
 import android.util.Log;
+import android.view.Display;
 import android.view.Menu;
 import android.view.MenuItem;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.AdapterView;
-import android.widget.BaseAdapter;
-import android.widget.GridView;
-import android.widget.ImageView;
+import android.view.Window;
+import android.view.WindowManager;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.InputStream;
 import java.io.Reader;
 
-import com.example.leiareader.ShowSelectedPaper;
-
-import android.widget.AdapterView.OnItemClickListener;
+import com.leiamedia.leiareader.SelectPaper;
 
 public class MainActivity extends Activity {
-	public final static String EXTRA_SELECTEDDIR = "com.example.leiareader.SELECTEDDIR";
 	
 	static final String GETLIST = "";
 	static final String DOWNLOAD = "";
-    
-    private Vector <Bitmap>imageIDs = new Vector<Bitmap>();
-    private String extimageorder[][];
 	
+	private TouchImageView img;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                                WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
-        setContentView(R.layout.activity_main);
-
-        loadSelectedPaperList();
+        setContentView(R.layout.activity_showselectedpage);
+        
+        img = (TouchImageView) findViewById(R.id.img);
+        
+        File files[] = getExternalFilesDir(null).listFiles();
+        if(files.length > 0){
+	        Intent intent = getIntent();
+	        String dir = intent.getStringExtra(SelectPaper.EXTRA_SELECTEDDIR);
+	        if(dir == null)
+	        	dir = Utilities.orderby(files)[0][1];
+	        loadPage(dir,(savedInstanceState != null) ? savedInstanceState.getInt("page") : 0);
+        }
     }
 
-    private void loadSelectedPaperList(){
-        getPaperList();
-
-        GridView gridView = (GridView) findViewById(R.id.gridview);
-        gridView.setAdapter(new ImageAdapter(this));
-
-        gridView.setOnItemClickListener(new OnItemClickListener()
-        {
-            public void onItemClick(AdapterView<?> parent,
-            View v, int position, long id) {
-                Intent intent = new Intent(MainActivity.this, ShowSelectedPaper.class);
-        		intent.putExtra(EXTRA_SELECTEDDIR,extimageorder[position][1]+"/");
-        		startActivity(intent);  
-            }
-        });
+    @Override
+    public void onSaveInstanceState(Bundle savedInstanceState) {
+      super.onSaveInstanceState(savedInstanceState);
+      savedInstanceState.putInt("page",img.getCounter());
     }
-
+    
+    private void loadPage(String directory, int page){
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        int width = size.x;
+        int height = size.y;
+        File fl[] = PublicMaterial.material(directory);
+        if(fl.length > 0)
+        	img.setFileList(fl, width, height, page);
+    }
+    
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
@@ -94,11 +96,14 @@ public class MainActivity extends Activity {
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
-        if (id == R.id.action_settings) {
-        	
-        	if(IsExternalStorageAvailableAndWriteable()){
+        if (id == R.id.action_load) {
+        	if(IsExternalStorageAvailableAndWriteable()) {
         		new ReadPapyrosTask().execute(GETLIST,DOWNLOAD);
         	}
+        	return true;
+        } else if (id == R.id.action_select) {
+            Intent intent = new Intent(MainActivity.this, SelectPaper.class);
+    		startActivity(intent);
         	return true;
         }
         return super.onOptionsItemSelected(item);
@@ -107,20 +112,26 @@ public class MainActivity extends Activity {
     private class ReadPapyrosTask extends AsyncTask
     <String, Void, String> {
     	ProgressDialog progressDialog;
+    	PowerManager pm;
+    	PowerManager.WakeLock wl;
         @Override
         protected void onPreExecute()
         {
+        	pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
+        	wl = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "Leia reader");
+        	
             progressDialog = ProgressDialog.show(MainActivity.this, "Leia reader",
             		"Haetaan aineisto. Toimenpide kestää muutaman minuutin.", true);
         };
         @Override
         protected String doInBackground(String... urls) {
+        	wl.acquire();
             return getMaterialFromLeia(urls[0],urls[1]);
         }
         @Override
         protected void onPostExecute(String result) {
+        	wl.release();
         	progressDialog.dismiss();
-        	loadSelectedPaperList();
         }
     }
 
@@ -176,7 +187,7 @@ public class MainActivity extends Activity {
 		f[1] = getExternalFilesDir("paper2");
 		f[2] = getExternalFilesDir("paper3");
 		f[3] = getExternalFilesDir("paper4");
-    	String[][] fileorder = orderby(f);
+    	String[][] fileorder = Utilities.orderby(f);
 		
     	JSONObject jsonObject = new JSONObject("{\"data\":"+stringBuilder.toString()+"}");
     	JSONArray postalCodesItems = new JSONArray(jsonObject.getString("data"));
@@ -203,7 +214,7 @@ public class MainActivity extends Activity {
 	    	if(find){
 	    		Log.d("KOE","AML: Document Make: "+ date.toString() +" File: "+fileorder[f.length-1][1]);
 	    		loadRowData(udata, id, fileorder[f.length-1][1], date);
-	    		fileorder = orderby(f);
+	    		fileorder = Utilities.orderby(f);
 	    	}
 	    	
 	    	papercounter++;
@@ -243,98 +254,8 @@ public class MainActivity extends Activity {
 			outputStream.close();
 		}
 	}
-
-    public class ImageAdapter extends BaseAdapter 
-    {
-        private Context context;
-
-        public ImageAdapter(Context c)
-        {
-            context = c;
-        }
-
-        //---returns the number of images---
-        public int getCount() {
-            return imageIDs.size();
-        }
-
-        //---returns the item---
-        public Object getItem(int position) {
-            return position;
-        }
-
-        //---returns the ID of an item---
-        public long getItemId(int position) {
-            return position;
-        }
-
-        //---returns an ImageView view---
-        public View getView(int position, View convertView,
-                ViewGroup parent)
-        {
-            ImageView imageView;
-            if (convertView == null) {
-                imageView = new ImageView(context);
-                imageView.setLayoutParams(new
-                        GridView.LayoutParams(195, 195));
-                imageView.setScaleType(
-                        ImageView.ScaleType.CENTER_CROP);
-                imageView.setPadding(5, 5, 5, 5);
-            } else {
-                imageView = (ImageView) convertView;
-            }
-		    imageView.setImageBitmap(imageIDs.get(position));
-            
-            return imageView;
-        }
-    }
-
-    private void getPaperList(){
-    	if(IsExternalStorageAvailableAndWriteable()){
-    		extimageorder = orderby(getExternalFilesDir(null).listFiles());
-    		imageIDs = new Vector<Bitmap>();
-    		for(int loop=0 ; loop<extimageorder.length ; loop++){
-	    		File fl[] = PublicMaterial.material(extimageorder[loop][1]+"/");	    		
-	            if(fl.length > 0)
-	    			imageIDs.add(BitmapFactory.decodeFile(fl[0].getAbsolutePath()));
-    		}    		
-		}
-    }
-
-    public String[][] orderby(File f[]) {
-    	
-    	String out[][] = new String[f.length][2];
-    	for(int i=0;i<f.length;i++){
-    		out[i][1] = f[i].getAbsolutePath();
-    		try{
-    			FileInputStream fis = new FileInputStream(f[i].getAbsolutePath()+"/DATE");
-    			InputStreamReader isr = new InputStreamReader(fis);
-    			char[] inputBuffer = new char[10];
-    			isr.read(inputBuffer,0,10);
-    			out[i][0] = new String(inputBuffer,0,10);
-            	isr.close();
-            	fis.close();
-    		} catch(Exception e){
-    			out[i][0] = new String("");
-    		}
-    	}
-
-	    for(int x=0;x<f.length;x++){
-		    for(int y=0;y<(f.length-1);y++){
-			    if(out[y][0].compareTo(out[y+1][0])<0){
-			    	String t0 = out[y][0];
-			    	String t1 = out[y][1];
-			    	out[y][0] = out[y+1][0];
-			    	out[y][1] = out[y+1][1];
-			    	out[y+1][0] = t0;
-			    	out[y+1][1] = t1;
-			    }
-		    }
-	    }
-	    return out;
-    }
     
-    public boolean IsExternalStorageAvailableAndWriteable() {
+    private boolean IsExternalStorageAvailableAndWriteable() {
         boolean externalStorageAvailable = false;
         boolean externalStorageWriteable = false;
         String state = Environment.getExternalStorageState();

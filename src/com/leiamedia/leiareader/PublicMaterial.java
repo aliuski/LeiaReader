@@ -1,4 +1,4 @@
-package com.example.leiareader;
+package com.leiamedia.leiareader;
 
 import java.io.File;
 import java.io.FileInputStream;
