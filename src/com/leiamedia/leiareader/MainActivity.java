@@ -46,8 +46,8 @@ import com.leiamedia.leiareader.SelectPaper;
 
 public class MainActivity extends Activity {
 	
-	static final String GETLIST = "https://leiapapyros.com/leia/public/main/api/edition/list/";
-	static final String DOWNLOAD = "https://leiapapyros.com/leia/public/main/api/download/";
+	static final String GETLIST = "";
+	static final String DOWNLOAD = "";
 	
 	static final int SELECTPAPER = 1;
 	private String directory;
