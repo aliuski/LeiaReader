@@ -5,5 +5,6 @@
     <string name="hello_world">Hello world!</string>
     <string name="action_load">Lataa lehti palvelusta</string>
     <string name="action_select">Valitse lehti</string>
-
+    <string name="android_settings">Android asetukset</string>
+    <string name="download_material">Haetaan aineisto. Toimenpide kestää muutaman minuutin.</string>
 </resources>

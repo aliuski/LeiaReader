@@ -8,7 +8,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Point;
 import android.os.Bundle;
+import android.view.Display;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -24,7 +28,8 @@ public class SelectPaper extends Activity {
 	
     private Vector <Bitmap>imageIDs = new Vector<Bitmap>();
     private String extimageorder[][];
-	
+	private int width;
+	private int height;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -34,7 +39,13 @@ public class SelectPaper extends Activity {
                                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         
         setContentView(R.layout.activity_main);
-
+        
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        width = size.x;
+        height = size.y;
+        
         loadSelectedPaperList();
     }
     
@@ -49,8 +60,9 @@ public class SelectPaper extends Activity {
             public void onItemClick(AdapterView<?> parent,
             View v, int position, long id) {
                 Intent intent = new Intent(SelectPaper.this, MainActivity.class);
-        		intent.putExtra(EXTRA_SELECTEDDIR,extimageorder[position][1]+"/");
-        		startActivity(intent);  
+        		intent.putExtra(EXTRA_SELECTEDDIR,extimageorder[position][1]+"/");                
+        		setResult(Activity.RESULT_OK, intent);
+        		finish();
             }
         });
     }
@@ -96,8 +108,9 @@ public class SelectPaper extends Activity {
             ImageView imageView;
             if (convertView == null) {
                 imageView = new ImageView(context);
+            	int size = ((((height > width) ? width : height)) - 60) / 2;
                 imageView.setLayoutParams(new
-                        GridView.LayoutParams(195, 195));
+                        GridView.LayoutParams(size, size));
                 imageView.setScaleType(
                         ImageView.ScaleType.CENTER_CROP);
                 imageView.setPadding(5, 5, 5, 5);
@@ -109,13 +122,23 @@ public class SelectPaper extends Activity {
             return imageView;
         }
     }
-/*
+    
     @Override
-    protected void onStart(){
-    	super.onStart();
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        menu.removeItem(R.id.action_select);
+        menu.removeItem(R.id.action_load);
+        return true;
     }
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        return false;
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        if (id == R.id.android_settings) {
+            Intent i = getPackageManager().getLaunchIntentForPackage("com.android.settings");
+            startActivity(i);
+        	return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
-*/
 }

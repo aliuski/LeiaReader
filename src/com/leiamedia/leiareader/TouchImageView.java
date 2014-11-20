@@ -169,6 +169,10 @@ public class TouchImageView extends ImageView {
 	}
 	
 	public void setFileList(File filelist[], int sizex, int sizey, int page){
+        matrix = new Matrix();
+        savedMatrix = new Matrix();
+	    start = new PointF();
+	    mid = new PointF();
 		this.filelist = filelist;
 		this.sizex = sizex;
 		this.sizey = sizey;

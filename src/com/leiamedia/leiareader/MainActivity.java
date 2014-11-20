@@ -41,13 +41,20 @@ import java.io.OutputStream;
 import java.io.InputStream;
 import java.io.Reader;
 
+import com.leiamedia.leiareader.R;
 import com.leiamedia.leiareader.SelectPaper;
 
 public class MainActivity extends Activity {
 	
-	static final String GETLIST = "";
-	static final String DOWNLOAD = "";
+	static final String GETLIST = "https://leiapapyros.com/leia/public/main/api/edition/list/";
+	static final String DOWNLOAD = "https://leiapapyros.com/leia/public/main/api/download/";
 	
+	static final int SELECTPAPER = 1;
+	private String directory;
+    private int width;
+    private int height;
+    private boolean updatedone = true;
+    
 	private TouchImageView img;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,36 +67,72 @@ public class MainActivity extends Activity {
         
         img = (TouchImageView) findViewById(R.id.img);
         
+        try{
+        
+        Display display = getWindowManager().getDefaultDisplay();
+        Point size = new Point();
+        display.getSize(size);
+        width = size.x;
+        height = size.y;
+        
         File files[] = getExternalFilesDir(null).listFiles();
         if(files.length > 0){
-	        Intent intent = getIntent();
-	        String dir = intent.getStringExtra(SelectPaper.EXTRA_SELECTEDDIR);
-	        if(dir == null)
-	        	dir = Utilities.orderby(files)[0][1];
-	        loadPage(dir,(savedInstanceState != null) ? savedInstanceState.getInt("page") : 0);
+        	directory = (savedInstanceState != null) ? savedInstanceState.getString("paper") : null;
+	        if(directory == null)
+	        	directory = Utilities.orderby(files)[0][1];
+	        File fl[] = PublicMaterial.material(directory);
+	        if(fl.length > 0)
+	        	img.setFileList(fl, width, height, (savedInstanceState != null) ? savedInstanceState.getInt("page") : 0);
         }
+        
+        }catch(Exception e){
+        	Log.d("Leiareader","onCreate() : "+e);
+        }
+        updatedone = true;
+    }
+
+	@Override
+	public void onResume() {
+	  super.onResume();
+	  if(!updatedone){
+    	  directory = Utilities.orderby(getExternalFilesDir(null).listFiles())[0][1];
+    	  img.setFileList(PublicMaterial.material(directory), width, height, 0);
+	  }
+	  updatedone = true;
+	}
+    
+	@Override
+	protected void onPause() {
+		super.onPause();
+		updatedone = false;
+	}
+    
+    @Override
+    public void onActivityResult(int requestCode, int resultCode, Intent data) {
+      super.onActivityResult(requestCode, resultCode, data);
+      switch(requestCode) {
+        case (1) : {
+          if (resultCode == Activity.RESULT_OK) {
+        	  directory = data.getStringExtra(SelectPaper.EXTRA_SELECTEDDIR);
+              img.setFileList(PublicMaterial.material(directory), width, height, 0);
+              updatedone = true;
+          }
+          break;
+        } 
+      }
     }
 
     @Override
     public void onSaveInstanceState(Bundle savedInstanceState) {
       super.onSaveInstanceState(savedInstanceState);
       savedInstanceState.putInt("page",img.getCounter());
+      savedInstanceState.putString("paper",directory);
     }
-    
-    private void loadPage(String directory, int page){
-        Display display = getWindowManager().getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        int width = size.x;
-        int height = size.y;
-        File fl[] = PublicMaterial.material(directory);
-        if(fl.length > 0)
-        	img.setFileList(fl, width, height, page);
-    }
-    
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.main, menu);
+        menu.removeItem(R.id.android_settings);
         return true;
     }
 
@@ -102,8 +145,9 @@ public class MainActivity extends Activity {
         	}
         	return true;
         } else if (id == R.id.action_select) {
+        	directory = null;
             Intent intent = new Intent(MainActivity.this, SelectPaper.class);
-    		startActivity(intent);
+    		startActivityForResult(intent,SELECTPAPER);
         	return true;
         }
         return super.onOptionsItemSelected(item);
@@ -121,7 +165,7 @@ public class MainActivity extends Activity {
         	wl = pm.newWakeLock(PowerManager.SCREEN_DIM_WAKE_LOCK, "Leia reader");
         	
             progressDialog = ProgressDialog.show(MainActivity.this, "Leia reader",
-            		"Haetaan aineisto. Toimenpide kestää muutaman minuutin.", true);
+            		getResources().getString(R.string.download_material), true);
         };
         @Override
         protected String doInBackground(String... urls) {
@@ -132,6 +176,10 @@ public class MainActivity extends Activity {
         protected void onPostExecute(String result) {
         	wl.release();
         	progressDialog.dismiss();
+        	directory = Utilities.orderby(getExternalFilesDir(null).listFiles())[0][1];
+            File fl[] = PublicMaterial.material(directory);
+            if(fl.length > 0)
+            	img.setFileList(fl, width, height, 0);
         }
     }
 
@@ -191,40 +239,32 @@ public class MainActivity extends Activity {
 		
     	JSONObject jsonObject = new JSONObject("{\"data\":"+stringBuilder.toString()+"}");
     	JSONArray postalCodesItems = new JSONArray(jsonObject.getString("data"));
-
-    	Log.d("KOE","AML: size: "+ postalCodesItems.length());
-    	
     	int papercounter = 0;
     	for(int loop=postalCodesItems.length()-1;loop > 0;loop-=2){
-    		Log.d("KOE","AML: loop: "+ loop);
 	    	JSONObject postalCodesItem = postalCodesItems.getJSONObject(loop-1);
+	    	if(postalCodesItem.getInt("filesize") < 1000)
+	    		continue;
 	    	String id = postalCodesItem.getString("id");
 	    	java.text.DateFormat df = new SimpleDateFormat("yyyyMMddkkmmss");
 	    	Date date = df.parse(postalCodesItem.getString("createdate"));
 	    	boolean find = true;
 	    	for(int i=0 ; i<f.length ; i++){
-	    		
-	    		Log.d("KOE","AML: Test: "+ fileorder[i][0] +" "+ (new java.sql.Date(date.getTime())).toString());
 	    		if(fileorder[i][0].equals((new java.sql.Date(date.getTime())).toString())){
 	    			find = false;
-	    			Log.d("KOE","AML: Document found: "+ fileorder[i][0]);
 	    			break;
 	    		}
 	    	}
 	    	if(find){
-	    		Log.d("KOE","AML: Document Make: "+ date.toString() +" File: "+fileorder[f.length-1][1]);
 	    		loadRowData(udata, id, fileorder[f.length-1][1], date);
 	    		fileorder = Utilities.orderby(f);
 	    	}
-	    	
 	    	papercounter++;
-	    	Log.d("KOE","AML: papercounter: "+ papercounter);
 	    	if(papercounter >= 4)
 	    		break;
     	}
     	
 	}catch(Exception e){
-		Log.d("KOE","AML: "+ e);
+		Log.d("Leiareader","getMaterialFromLeia() : "+ e);
 		return "FALSE";
 		}
 	return "TRUE";
